@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import 'profile_screen.dart';
+import 'fault_report_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   final UserModel user;
 
   const WelcomeScreen({super.key, required this.user});
-
 
 
   @override
@@ -146,21 +146,19 @@ class WelcomeScreen extends StatelessWidget {
                  // Ana menü butonları
                  Column(
                    children: [
-                     _buildMenuButton(
-                       context,
-                       'Arıza Bildir',
-                       Icons.report_problem,
-                       const Color(0xFF667eea),
-                       () {
-                         // Arıza bildirim sayfasına git
-                         ScaffoldMessenger.of(context).showSnackBar(
-                           const SnackBar(
-                             content: Text('Arıza bildirim özelliği yakında eklenecek!'),
-                             backgroundColor: Color(0xFF667eea),
-                           ),
-                         );
-                       },
-                     ),
+                                             _buildMenuButton(
+                          context,
+                          'Arıza Bildir',
+                          Icons.report_problem,
+                          const Color(0xFF667eea),
+                          () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => FaultReportScreen(user: user),
+                              ),
+                            );
+                          },
+                        ),
                      const SizedBox(height: 20),
                      _buildMenuButton(
                        context,
@@ -213,8 +211,6 @@ class WelcomeScreen extends StatelessWidget {
       ),
     );
   }
-
-
 
   Widget _buildMenuButton(
     BuildContext context,
