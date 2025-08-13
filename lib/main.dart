@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'firebase_options.dart';
+import 'models/user_model.dart';
+import 'models/admin_model.dart';
 import 'screens/login_screen.dart';
 import 'screens/welcome_screen.dart';
-import 'models/user_model.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'screens/web_home_screen.dart';
+import 'screens/web_admin_login_screen.dart';
+import 'screens/web_admin_dashboard_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,7 +27,7 @@ Future<void> main() async {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-  
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -42,6 +47,12 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Web için ana sayfa göster
+    if (kIsWeb) {
+      return const WebHomeScreen();
+    }
+
+    // Mobil için auth kontrolü
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
@@ -54,14 +65,14 @@ class AuthWrapper extends StatelessWidget {
         }
         
         if (snapshot.hasData && snapshot.data != null) {
-          // Kullanıcı giriş yapmış, kullanıcı bilgilerini al ve hoşgeldin sayfasına git
+          // Önce admin kontrolü yap
           return FutureBuilder<DocumentSnapshot>(
             future: FirebaseFirestore.instance
-                .collection('users')
+                .collection('admins')
                 .doc(snapshot.data!.uid)
                 .get(),
-            builder: (context, userSnapshot) {
-              if (userSnapshot.connectionState == ConnectionState.waiting) {
+            builder: (context, adminSnapshot) {
+              if (adminSnapshot.connectionState == ConnectionState.waiting) {
                 return const Scaffold(
                   body: Center(
                     child: CircularProgressIndicator(),
@@ -69,13 +80,36 @@ class AuthWrapper extends StatelessWidget {
                 );
               }
               
-              if (userSnapshot.hasData && userSnapshot.data!.exists) {
-                final userData = UserModel.fromMap(userSnapshot.data!.data() as Map<String, dynamic>);
-                return WelcomeScreen(user: userData);
+              if (adminSnapshot.hasData && adminSnapshot.data!.exists) {
+                // Admin kullanıcı
+                final adminData = AdminModel.fromMap(adminSnapshot.data!.data() as Map<String, dynamic>);
+                return WebAdminDashboardScreen(admin: adminData);
               }
               
-              // Kullanıcı verisi bulunamadı, giriş sayfasına yönlendir
-              return const LoginScreen();
+              // Normal kullanıcı kontrolü
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(snapshot.data!.uid)
+                    .get(),
+                builder: (context, userSnapshot) {
+                  if (userSnapshot.connectionState == ConnectionState.waiting) {
+                    return const Scaffold(
+                      body: Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+                  
+                  if (userSnapshot.hasData && userSnapshot.data!.exists) {
+                    final userData = UserModel.fromMap(userSnapshot.data!.data() as Map<String, dynamic>);
+                    return WelcomeScreen(user: userData);
+                  }
+                  
+                  // Kullanıcı verisi bulunamadı, giriş sayfasına yönlendir
+                  return const LoginScreen();
+                },
+              );
             },
           );
         }
