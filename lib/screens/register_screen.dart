@@ -47,23 +47,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
       print('E-posta: ${_emailController.text.trim()}');
       print('Şifre uzunluğu: ${_passwordController.text.length}');
       
-      // Önce Firebase Auth ile kullanıcı oluşturmayı dene
-      User? firebaseUser;
-      try {
-        final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-        );
-        firebaseUser = userCredential.user;
-        print('Firebase Auth ile kullanıcı oluşturuldu: ${firebaseUser?.uid}');
-      } catch (authError) {
-        print('Firebase Auth hatası: $authError');
-        // Eğer Firebase Auth çalışmıyorsa, geçici bir UID oluştur
-        firebaseUser = null;
-      }
+      // Firebase Auth ile kullanıcı oluştur
+      final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      
+      final firebaseUser = userCredential.user;
+      print('Firebase Auth ile kullanıcı oluşturuldu: ${firebaseUser?.uid}');
 
       // Kullanıcı bilgilerini Firestore'a kaydet
-      final uid = firebaseUser?.uid ?? DateTime.now().millisecondsSinceEpoch.toString();
+      final uid = firebaseUser!.uid;
       final user = UserModel(
         uid: uid,
         firstName: _firstNameController.text.trim(),

@@ -34,32 +34,40 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
+      print('Giriş işlemi başlatılıyor...');
+      print('E-posta: ${_emailController.text.trim()}');
+      
+      // Firebase Auth ile giriş yap
       final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+      
+      final firebaseUser = userCredential.user;
+      print('Firebase Auth ile giriş başarılı: ${firebaseUser?.uid}');
 
-      if (userCredential.user != null) {
-        // Kullanıcı bilgilerini Firestore'dan al
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userCredential.user!.uid)
-            .get();
+      // Firestore'dan kullanıcı bilgilerini al
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(firebaseUser!.uid)
+          .get();
 
-        if (userDoc.exists) {
-          final userData = UserModel.fromMap(userDoc.data()!);
-          
-          if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => WelcomeScreen(user: userData),
-              ),
-            );
-          }
+      if (userDoc.exists) {
+        final userData = UserModel.fromMap(userDoc.data()!);
+        print('Kullanıcı bilgileri alındı: ${userData.firstName} ${userData.lastName}');
+        
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => WelcomeScreen(user: userData),
+            ),
+          );
         }
+      } else {
+        throw Exception('Kullanıcı bilgileri bulunamadı');
       }
     } on FirebaseAuthException catch (e) {
-      String errorMessage = 'Giriş yapılırken bir hata oluştu';
+      String errorMessage = 'Giriş yapılırken bir hata oluştu: ${e.code}';
       
       if (e.code == 'user-not-found') {
         errorMessage = 'Bu e-posta adresi ile kayıtlı kullanıcı bulunamadı';
@@ -67,6 +75,8 @@ class _LoginScreenState extends State<LoginScreen> {
         errorMessage = 'Yanlış şifre';
       } else if (e.code == 'invalid-email') {
         errorMessage = 'Geçersiz e-posta adresi';
+      } else if (e.code == 'user-disabled') {
+        errorMessage = 'Bu hesap devre dışı bırakılmış';
       }
 
       if (mounted) {
@@ -74,15 +84,17 @@ class _LoginScreenState extends State<LoginScreen> {
           SnackBar(
             content: Text(errorMessage),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Beklenmeyen bir hata oluştu'),
+          SnackBar(
+            content: Text('Giriş hatası: $e'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
