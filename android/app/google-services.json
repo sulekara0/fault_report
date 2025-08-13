@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "884446641689",
+    "project_id": "fault-8506366",
+    "storage_bucket": "fault-8506366.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:884446641689:android:9d833a48b1da6f7015b488",
+        "android_client_info": {
+          "package_name": "com.seninfirma.fault_report"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNkHWs-ZHe27WtRty4CMq7VP64_txbGLA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
