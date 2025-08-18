@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/admin_model.dart';
+import '../services/admin_session_service.dart';
 import 'web_admin_dashboard_screen.dart';
 
 class WebAdminLoginScreen extends StatefulWidget {
@@ -34,26 +33,31 @@ class _WebAdminLoginScreenState extends State<WebAdminLoginScreen> {
 
     try {
       print('Admin giriş işlemi başlatılıyor...');
-      print('E-posta: ${_emailController.text.trim()}');
+      print('Kullanıcı adı: ${_emailController.text.trim()}');
       
-      // Firebase Auth ile giriş yap
-      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
+      // Sabit admin hesabı kontrolü
+      const String adminUsername = 'admin';
+      const String adminPassword = 'admin123';
       
-      final firebaseUser = userCredential.user;
-      print('Firebase Auth ile giriş başarılı: ${firebaseUser?.uid}');
-
-      // Admin bilgilerini kontrol et
-      final adminDoc = await FirebaseFirestore.instance
-          .collection('admins')
-          .doc(firebaseUser!.uid)
-          .get();
-
-      if (adminDoc.exists) {
-        final adminData = AdminModel.fromMap(adminDoc.data()!);
-        print('Admin bilgileri alındı: ${adminData.name} (${adminData.role})');
+      if (_emailController.text.trim() == adminUsername && 
+          _passwordController.text == adminPassword) {
+        
+        // Sabit admin bilgileri oluştur
+        final adminData = AdminModel(
+          uid: 'static_admin_001',
+          email: 'admin@system.local',
+          display: 'Sistem Yöneticisi',
+          role: 'admin',
+          createdAt: DateTime.now(),
+          active: true,
+          phone: null,
+          createdBy: 'system',
+        );
+        
+        print('Admin girişi başarılı: ${adminData.display}');
+        
+        // Admin session'ını kaydet
+        await AdminSessionService.saveAdminSession(adminData);
         
         if (mounted) {
           Navigator.of(context).pushReplacement(
@@ -63,29 +67,7 @@ class _WebAdminLoginScreenState extends State<WebAdminLoginScreen> {
           );
         }
       } else {
-        throw Exception('Bu kullanıcı admin değil');
-      }
-    } on FirebaseAuthException catch (e) {
-      String errorMessage = 'Giriş yapılırken bir hata oluştu: ${e.code}';
-      
-      if (e.code == 'user-not-found') {
-        errorMessage = 'Bu e-posta adresi ile kayıtlı kullanıcı bulunamadı';
-      } else if (e.code == 'wrong-password') {
-        errorMessage = 'Yanlış şifre';
-      } else if (e.code == 'invalid-email') {
-        errorMessage = 'Geçersiz e-posta adresi';
-      } else if (e.code == 'user-disabled') {
-        errorMessage = 'Bu hesap devre dışı bırakılmış';
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
+        throw Exception('Kullanıcı adı veya şifre hatalı');
       }
     } catch (e) {
       if (mounted) {
@@ -169,13 +151,12 @@ class _WebAdminLoginScreenState extends State<WebAdminLoginScreen> {
                       ),
                       const SizedBox(height: 40),
                       
-                      // E-posta alanı
+                      // Kullanıcı adı alanı
                       TextFormField(
                         controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
                         decoration: InputDecoration(
-                          labelText: 'E-posta',
-                          prefixIcon: const Icon(Icons.email),
+                          labelText: 'Kullanıcı Adı',
+                          prefixIcon: const Icon(Icons.person),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -186,10 +167,7 @@ class _WebAdminLoginScreenState extends State<WebAdminLoginScreen> {
                         ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'E-posta adresi gerekli';
-                          }
-                          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                            return 'Geçerli bir e-posta adresi girin';
+                            return 'Kullanıcı adı gerekli';
                           }
                           return null;
                         },
@@ -265,21 +243,7 @@ class _WebAdminLoginScreenState extends State<WebAdminLoginScreen> {
                                 ),
                         ),
                       ),
-                      const SizedBox(height: 20),
-                      
-                      // Admin oluşturma linki
-                      TextButton(
-                        onPressed: () {
-                          _showCreateAdminDialog();
-                        },
-                        child: const Text(
-                          'İlk Admin Hesabını Oluştur',
-                          style: TextStyle(
-                            color: Color(0xFF667eea),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
+
                     ],
                   ),
                 ),
@@ -291,147 +255,5 @@ class _WebAdminLoginScreenState extends State<WebAdminLoginScreen> {
     );
   }
 
-  void _showCreateAdminDialog() {
-    final _createFormKey = GlobalKey<FormState>();
-    final _nameController = TextEditingController();
-    final _emailController = TextEditingController();
-    final _passwordController = TextEditingController();
-    bool _isCreating = false;
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('İlk Admin Hesabını Oluştur'),
-        content: Form(
-          key: _createFormKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Ad Soyad',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Ad soyad gerekli';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 15),
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'E-posta',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'E-posta gerekli';
-                  }
-                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                    return 'Geçerli bir e-posta adresi girin';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 15),
-              TextFormField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Şifre',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Şifre gerekli';
-                  }
-                  if (value.length < 6) {
-                    return 'Şifre en az 6 karakter olmalı';
-                  }
-                  return null;
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('İptal'),
-          ),
-          StatefulBuilder(
-            builder: (context, setState) => ElevatedButton(
-              onPressed: _isCreating ? null : () async {
-                if (!_createFormKey.currentState!.validate()) return;
-
-                setState(() {
-                  _isCreating = true;
-                });
-
-                try {
-                  // Firebase Auth ile kullanıcı oluştur
-                  final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-                    email: _emailController.text.trim(),
-                    password: _passwordController.text,
-                  );
-
-                  // Admin bilgilerini Firestore'a kaydet
-                  final admin = AdminModel(
-                    uid: userCredential.user!.uid,
-                    email: _emailController.text.trim(),
-                    name: _nameController.text.trim(),
-                    role: 'admin',
-                    createdAt: DateTime.now(),
-                    isActive: true,
-                  );
-
-                  await FirebaseFirestore.instance
-                      .collection('admins')
-                      .doc(admin.uid)
-                      .set(admin.toMap());
-
-                  if (mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Admin hesabı başarıyla oluşturuldu!'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Hata: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                } finally {
-                  if (mounted) {
-                    setState(() {
-                      _isCreating = false;
-                    });
-                  }
-                }
-              },
-              child: _isCreating
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Oluştur'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

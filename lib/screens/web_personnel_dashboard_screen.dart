@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/admin_model.dart';
 import '../models/fault_report_model.dart';
+import '../services/admin_session_service.dart';
 import 'web_personnel_login_screen.dart';
 
 class WebPersonnelDashboardScreen extends StatefulWidget {
@@ -94,7 +95,7 @@ class _WebPersonnelDashboardScreenState extends State<WebPersonnelDashboardScree
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        widget.personnel.name,
+                        widget.personnel.display,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18,
@@ -637,7 +638,8 @@ class _WebPersonnelDashboardScreenState extends State<WebPersonnelDashboardScree
   }
 
   void _logout() async {
-    await FirebaseAuth.instance.signOut();
+    // Session'ı temizle
+    await AdminSessionService.clearAdminSession();
     if (mounted) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -750,7 +752,7 @@ class _WebPersonnelDashboardScreenState extends State<WebPersonnelDashboardScree
                       .collection('notes')
                       .add({
                     'note': _noteController.text.trim(),
-                    'addedBy': widget.personnel.name,
+                                                  'addedBy': widget.personnel.display,
                     'addedAt': DateTime.now().toIso8601String(),
                   });
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/admin_model.dart';
+import '../services/admin_session_service.dart';
 import 'web_personnel_dashboard_screen.dart';
 
 class WebPersonnelLoginScreen extends StatefulWidget {
@@ -36,60 +35,26 @@ class _WebPersonnelLoginScreenState extends State<WebPersonnelLoginScreen> {
       print('Personel giriş işlemi başlatılıyor...');
       print('E-posta: ${_emailController.text.trim()}');
       
-      // Firebase Auth ile giriş yap
-      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+      // Session'dan personel listesini al
+      final personnelList = await AdminSessionService.getPersonnelList();
+      
+      // E-posta ve şifre ile personel ara (şifre kontrolü basit - demo için)
+      final personnel = personnelList.firstWhere(
+        (p) => p.email == _emailController.text.trim() && 
+               p.active == true &&
+               p.role == 'personel',
+        orElse: () => throw Exception('Geçersiz giriş bilgileri'),
       );
       
-      final firebaseUser = userCredential.user;
-      print('Firebase Auth ile giriş başarılı: ${firebaseUser?.uid}');
-
-      // Personel bilgilerini kontrol et
-      final personnelDoc = await FirebaseFirestore.instance
-          .collection('admins')
-          .doc(firebaseUser!.uid)
-          .get();
-
-      if (personnelDoc.exists) {
-        final personnelData = AdminModel.fromMap(personnelDoc.data()!);
-        
-        // Sadece personel rolündeki kullanıcılar giriş yapabilir
-        if (personnelData.role == 'personel') {
-          print('Personel bilgileri alındı: ${personnelData.name}');
-          
-          if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => WebPersonnelDashboardScreen(personnel: personnelData),
-              ),
-            );
-          }
-        } else {
-          throw Exception('Bu hesap personel hesabı değil');
-        }
-      } else {
-        throw Exception('Bu kullanıcı personel değil');
-      }
-    } on FirebaseAuthException catch (e) {
-      String errorMessage = 'Giriş yapılırken bir hata oluştu: ${e.code}';
+      print('Personel bulundu: ${personnel.display}');
       
-      if (e.code == 'user-not-found') {
-        errorMessage = 'Bu e-posta adresi ile kayıtlı kullanıcı bulunamadı';
-      } else if (e.code == 'wrong-password') {
-        errorMessage = 'Yanlış şifre';
-      } else if (e.code == 'invalid-email') {
-        errorMessage = 'Geçersiz e-posta adresi';
-      } else if (e.code == 'user-disabled') {
-        errorMessage = 'Bu hesap devre dışı bırakılmış';
-      }
-
+      // Personel session'ını kaydet
+      await AdminSessionService.saveAdminSession(personnel);
+      
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => WebPersonnelDashboardScreen(personnel: personnel),
           ),
         );
       }

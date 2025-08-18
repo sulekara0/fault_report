@@ -6,22 +6,33 @@ import 'package:flutter/foundation.dart';
 import 'firebase_options.dart';
 import 'models/user_model.dart';
 import 'models/admin_model.dart';
+import 'services/admin_session_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/web_home_screen.dart';
 import 'screens/web_admin_login_screen.dart';
 import 'screens/web_admin_dashboard_screen.dart';
+import 'screens/web_personnel_dashboard_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    print('Firebase başarıyla başlatıldı');
   } catch (e) {
+    print('Firebase başlatma hatası: $e');
     // Eğer options ile başlatma başarısız olursa, options olmadan dene
-    await Firebase.initializeApp();
+    try {
+      await Firebase.initializeApp();
+      print('Firebase options olmadan başlatıldı');
+    } catch (e2) {
+      print('Firebase başlatma tamamen başarısız: $e2');
+    }
   }
+  
   runApp(const MyApp());
 }
 
@@ -47,9 +58,33 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Web için ana sayfa göster
+    // Web için admin session kontrolü
     if (kIsWeb) {
-      return const WebHomeScreen();
+      return FutureBuilder<AdminModel?>(
+        future: AdminSessionService.getAdminSession(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+          
+          if (snapshot.hasData && snapshot.data != null) {
+            final user = snapshot.data!;
+            // Role'e göre dashboard'a git
+            if (user.role == 'admin') {
+              return WebAdminDashboardScreen(admin: user);
+            } else if (user.role == 'personel') {
+              return WebPersonnelDashboardScreen(personnel: user);
+            }
+          }
+          
+          // Session yoksa ana sayfayı göster
+          return const WebHomeScreen();
+        },
+      );
     }
 
     // Mobil için auth kontrolü
@@ -66,10 +101,10 @@ class AuthWrapper extends StatelessWidget {
         
         if (snapshot.hasData && snapshot.data != null) {
           // Önce admin kontrolü yap
-          return FutureBuilder<DocumentSnapshot>(
+          return FutureBuilder<QuerySnapshot>(
             future: FirebaseFirestore.instance
-                .collection('admins')
-                .doc(snapshot.data!.uid)
+                .collection('usersweb')
+                .where('email', isEqualTo: snapshot.data!.email)
                 .get(),
             builder: (context, adminSnapshot) {
               if (adminSnapshot.connectionState == ConnectionState.waiting) {
@@ -80,9 +115,9 @@ class AuthWrapper extends StatelessWidget {
                 );
               }
               
-              if (adminSnapshot.hasData && adminSnapshot.data!.exists) {
+              if (adminSnapshot.hasData && adminSnapshot.data!.docs.isNotEmpty) {
                 // Admin kullanıcı
-                final adminData = AdminModel.fromMap(adminSnapshot.data!.data() as Map<String, dynamic>);
+                final adminData = AdminModel.fromMap(adminSnapshot.data!.docs.first.data() as Map<String, dynamic>);
                 return WebAdminDashboardScreen(admin: adminData);
               }
               

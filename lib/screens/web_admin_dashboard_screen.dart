@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/admin_model.dart';
 import '../models/announcement_model.dart';
 import '../models/fault_report_model.dart';
+import '../services/admin_session_service.dart';
 import 'web_admin_login_screen.dart';
 
 class WebAdminDashboardScreen extends StatefulWidget {
@@ -17,6 +18,23 @@ class WebAdminDashboardScreen extends StatefulWidget {
 
 class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
   int _selectedIndex = 0;
+  
+  // Local personel listesi (Firebase yerine)
+  List<AdminModel> _personnelList = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPersonnelList();
+  }
+
+  // Personel listesini session'dan yükle
+  void _loadPersonnelList() async {
+    final personnelList = await AdminSessionService.getPersonnelList();
+    setState(() {
+      _personnelList = personnelList;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +111,7 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        widget.admin.name,
+                        widget.admin.display,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18,
@@ -418,37 +436,17 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
           const SizedBox(height: 20),
           
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('admins')
-                  .where('role', isEqualTo: 'personel')
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(child: Text('Bir hata oluştu'));
-                }
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final personnels = snapshot.data?.docs ?? [];
-
-                if (personnels.isEmpty) {
-                  return const Center(
+            child: _personnelList.isEmpty
+                ? const Center(
                     child: Text(
                       'Henüz personel bulunmuyor',
                       style: TextStyle(fontSize: 16, color: Colors.grey),
                     ),
-                  );
-                }
-
-                return ListView.builder(
-                  itemCount: personnels.length,
+                  )
+                : ListView.builder(
+                  itemCount: _personnelList.length,
                   itemBuilder: (context, index) {
-                    final personnel = AdminModel.fromMap(
-                      personnels[index].data() as Map<String, dynamic>,
-                    );
+                    final personnel = _personnelList[index];
                     
                     return Card(
                       margin: const EdgeInsets.only(bottom: 10),
@@ -456,22 +454,28 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
                         leading: CircleAvatar(
                           backgroundColor: const Color(0xFF667eea),
                           child: Text(
-                            personnel.name[0].toUpperCase(),
+                            personnel.display[0].toUpperCase(),
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
-                        title: Text(personnel.name),
+                        title: Text(personnel.display),
                         subtitle: Text(personnel.email),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Switch(
-                              value: personnel.isActive,
+                              value: personnel.active,
                               onChanged: (value) {
                                 _updatePersonnelStatus(personnel.uid, value);
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              onPressed: () {
+                                _showEditPersonnelDialog(personnel);
                               },
                             ),
                             IconButton(
@@ -485,9 +489,7 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
                       ),
                     );
                   },
-                );
-              },
-            ),
+                ),
           ),
         ],
       ),
@@ -817,7 +819,8 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
   }
 
   void _logout() async {
-    await FirebaseAuth.instance.signOut();
+    // Admin session'ını temizle
+    await AdminSessionService.clearAdminSession();
     if (mounted) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -863,6 +866,7 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
     final _nameController = TextEditingController();
     final _emailController = TextEditingController();
     final _passwordController = TextEditingController();
+    final _phoneController = TextEditingController();
     bool _isCreating = false;
 
     showDialog(
@@ -907,6 +911,15 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
               ),
               const SizedBox(height: 15),
               TextFormField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Telefon (Opsiyonel)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 15),
+              TextFormField(
                 controller: _passwordController,
                 obscureText: true,
                 decoration: const InputDecoration(
@@ -941,26 +954,29 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
                 });
 
                 try {
-                  // Firebase Auth ile kullanıcı oluştur
-                  final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-                    email: _emailController.text.trim(),
-                    password: _passwordController.text,
-                  );
+                  // E-posta kontrolü - aynı e-posta ile personel var mı kontrol et
+                  final emailExists = _personnelList.any((p) => p.email == _emailController.text.trim());
+                  if (emailExists) {
+                    throw Exception('Bu e-posta adresi ile zaten bir personel kayıtlı');
+                  }
 
-                  // Personel bilgilerini Firestore'a kaydet
+                  // Local olarak personel oluştur
                   final personnel = AdminModel(
-                    uid: userCredential.user!.uid,
+                    uid: 'personnel_${DateTime.now().millisecondsSinceEpoch}',
                     email: _emailController.text.trim(),
-                    name: _nameController.text.trim(),
+                    display: _nameController.text.trim(),
                     role: 'personel',
                     createdAt: DateTime.now(),
-                    isActive: true,
+                    active: true,
+                    phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+                    createdBy: widget.admin.uid,
                   );
 
-                  await FirebaseFirestore.instance
-                      .collection('admins')
-                      .doc(personnel.uid)
-                      .set(personnel.toMap());
+                  // Local listeye ekle - ana widget'ın state'ini güncelle
+                  _personnelList.add(personnel);
+                  
+                  // Session'a kaydet
+                  await AdminSessionService.savePersonnelList(_personnelList);
 
                   if (mounted) {
                     Navigator.of(context).pop();
@@ -970,6 +986,8 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
                         backgroundColor: Colors.green,
                       ),
                     );
+                    // Ana widget'ı yenile
+                    this.setState(() {});
                   }
                 } catch (e) {
                   if (mounted) {
@@ -1095,7 +1113,7 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
                     id: DateTime.now().millisecondsSinceEpoch.toString(),
                     title: _titleController.text.trim(),
                     content: _contentController.text.trim(),
-                    createdBy: widget.admin.name,
+                    createdBy: widget.admin.display,
                     createdAt: DateTime.now(),
                     location: _locationController.text.trim().isEmpty 
                         ? null 
@@ -1149,12 +1167,172 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
     );
   }
 
-  void _updatePersonnelStatus(String uid, bool isActive) async {
+  void _showEditPersonnelDialog(AdminModel personnel) {
+    final _formKey = GlobalKey<FormState>();
+    final _nameController = TextEditingController(text: personnel.display);
+    final _emailController = TextEditingController(text: personnel.email);
+    final _phoneController = TextEditingController(text: personnel.phone ?? '');
+    final _passwordController = TextEditingController();
+    bool _isUpdating = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Personel Düzenle'),
+        content: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Ad Soyad',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Ad soyad gerekli';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 15),
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'E-posta',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'E-posta gerekli';
+                  }
+                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                    return 'Geçerli bir e-posta adresi girin';
+                  }
+                  // Aynı e-posta kontrolü (kendisi hariç)
+                  final emailExists = _personnelList.any((p) => 
+                      p.email == value.trim() && p.uid != personnel.uid);
+                  if (emailExists) {
+                    return 'Bu e-posta adresi zaten kullanılıyor';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 15),
+              TextFormField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Telefon (Opsiyonel)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 15),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Yeni Şifre (Opsiyonel)',
+                  border: OutlineInputBorder(),
+                  hintText: 'Boş bırakılırsa değiştirilmez',
+                ),
+                validator: (value) {
+                  if (value != null && value.isNotEmpty && value.length < 6) {
+                    return 'Şifre en az 6 karakter olmalı';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('İptal'),
+          ),
+          StatefulBuilder(
+            builder: (context, setState) => ElevatedButton(
+              onPressed: _isUpdating ? null : () async {
+                if (!_formKey.currentState!.validate()) return;
+
+                setState(() {
+                  _isUpdating = true;
+                });
+
+                try {
+                  // Personeli güncelle
+                  final updatedPersonnel = personnel.copyWith(
+                    display: _nameController.text.trim(),
+                    email: _emailController.text.trim(),
+                    phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+                  );
+
+                  // Local listede güncelle
+                  final index = _personnelList.indexWhere((p) => p.uid == personnel.uid);
+                  if (index != -1) {
+                    _personnelList[index] = updatedPersonnel;
+                    
+                    // Session'a kaydet
+                    await AdminSessionService.savePersonnelList(_personnelList);
+
+                    if (mounted) {
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Personel başarıyla güncellendi!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                      // Ana widget'ı yenile
+                      this.setState(() {});
+                    }
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Hata: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } finally {
+                  if (mounted) {
+                    setState(() {
+                      _isUpdating = false;
+                    });
+                  }
+                }
+              },
+              child: _isUpdating
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Güncelle'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _updatePersonnelStatus(String uid, bool active) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('admins')
-          .doc(uid)
-          .update({'isActive': isActive});
+      // Local listede personeli bul ve güncelle
+      final index = _personnelList.indexWhere((p) => p.uid == uid);
+      if (index != -1) {
+        setState(() {
+          _personnelList[index] = _personnelList[index].copyWith(active: active);
+        });
+        // Session'a kaydet
+        await AdminSessionService.savePersonnelList(_personnelList);
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1170,7 +1348,7 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Personeli Sil'),
-        content: Text('${personnel.name} adlı personeli silmek istediğinizden emin misiniz?'),
+        content: Text('${personnel.display} adlı personeli silmek istediğinizden emin misiniz?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -1187,10 +1365,13 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
 
     if (confirmed == true) {
       try {
-        await FirebaseFirestore.instance
-            .collection('admins')
-            .doc(personnel.uid)
-            .delete();
+        // Local listeden personeli sil
+        setState(() {
+          _personnelList.removeWhere((p) => p.uid == personnel.uid);
+        });
+        
+        // Session'a kaydet
+        await AdminSessionService.savePersonnelList(_personnelList);
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

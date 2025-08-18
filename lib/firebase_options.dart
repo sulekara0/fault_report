@@ -19,9 +19,9 @@ class DefaultFirebaseOptions {
     }
   }
 
-  // --- WEB (Firebase Console'daki config değerlerin) ---
+  // --- WEB (Firebase Console'dan yeni config değerlerini buraya ekleyin) ---
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAqltNdKMSTVHs5IIV0rtcgFhMv-5BSUU',
+    apiKey: 'AIzaSyAqltNdKMSTVHs5IIV0rtcgFhMv-5BSUUo',
     appId: '1:884446641689:web:9c75b4851dffd27415b488',
     messagingSenderId: '884446641689',
     projectId: 'fault-8506366',
@@ -30,18 +30,18 @@ class DefaultFirebaseOptions {
     measurementId: 'G-56NB38CEZW',
   );
 
-  // --- ANDROID (Firebase Console'daki config değerlerin) ---
+  // --- ANDROID ---
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAqltNdKMSTVHs5IIV0rtcgFhMv-5BSUU',
+    apiKey: 'AIzaSyAqltNdKMSTVHs5IIV0rtcgFhMv-5BSUUo',
     appId: '1:884446641689:android:9c75b4851dffd27415b488',
     messagingSenderId: '884446641689',
     projectId: 'fault-8506366',
     storageBucket: 'fault-8506366.appspot.com',
   );
 
-  // --- iOS (Firebase Console'daki config değerlerin) ---
+  // --- iOS ---
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAqltNdKMSTVHs5IIV0rtcgFhMv-5BSUU',
+    apiKey: 'AIzaSyAqltNdKMSTVHs5IIV0rtcgFhMv-5BSUUo',
     appId: '1:884446641689:ios:9c75b4851dffd27415b488',
     messagingSenderId: '884446641689',
     projectId: 'fault-8506366',
