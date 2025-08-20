@@ -15,6 +15,9 @@ class FaultReportModel {
   final DateTime createdAt;
   final String status;
   final String trackingNumber;
+  final String? assignedTo; // Atanan personel ID'si
+  final String? assignedByName; // Atanan personel adı
+  final DateTime? assignedAt; // Atama tarihi
 
   FaultReportModel({
     required this.id,
@@ -33,6 +36,9 @@ class FaultReportModel {
     required this.createdAt,
     required this.status,
     required this.trackingNumber,
+    this.assignedTo,
+    this.assignedByName,
+    this.assignedAt,
   });
 
   Map<String, dynamic> toMap() {
@@ -53,6 +59,9 @@ class FaultReportModel {
       'createdAt': createdAt.toIso8601String(),
       'status': status,
       'trackingNumber': trackingNumber,
+      'assignedTo': assignedTo,
+      'assignedByName': assignedByName,
+      'assignedAt': assignedAt?.toIso8601String(),
     };
   }
 
@@ -74,6 +83,9 @@ class FaultReportModel {
       createdAt: DateTime.parse(map['createdAt']),
       status: map['status'] ?? 'pending',
       trackingNumber: map['trackingNumber'] ?? '',
+      assignedTo: map['assignedTo'],
+      assignedByName: map['assignedByName'],
+      assignedAt: map['assignedAt'] != null ? DateTime.parse(map['assignedAt']) : null,
     );
   }
 
@@ -94,6 +106,9 @@ class FaultReportModel {
     DateTime? createdAt,
     String? status,
     String? trackingNumber,
+    String? assignedTo,
+    String? assignedByName,
+    DateTime? assignedAt,
   }) {
     return FaultReportModel(
       id: id ?? this.id,
@@ -112,6 +127,9 @@ class FaultReportModel {
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
       trackingNumber: trackingNumber ?? this.trackingNumber,
+      assignedTo: assignedTo ?? this.assignedTo,
+      assignedByName: assignedByName ?? this.assignedByName,
+      assignedAt: assignedAt ?? this.assignedAt,
     );
   }
 }

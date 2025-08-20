@@ -29,24 +29,31 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
   }
 
   // Personel listesini session'dan yükle
-  void _loadPersonnelList() async {
+  Future<void> _loadPersonnelList() async {
     try {
+      print('Personel listesi yükleniyor...');
       // Önce Firebase'den personelleri çek
       final firebasePersonnel = await FirebaseFirestore.instance
           .collection('personnel')
           .get();
+      
+      print('Firebase\'den ${firebasePersonnel.docs.length} personel bulundu');
       
       List<AdminModel> personnelList = [];
       
       for (var doc in firebasePersonnel.docs) {
         try {
           final data = doc.data();
+          print('Personel verisi: $data');
           final personnel = AdminModel.fromMap(data);
           personnelList.add(personnel);
+          print('Personel eklendi: ${personnel.display} (${personnel.uid})');
         } catch (e) {
           print('Personel verisi okuma hatası: $e');
         }
       }
+      
+      print('Toplam ${personnelList.length} personel yüklendi');
       
       // Local storage'a kaydet
       await AdminSessionService.savePersonnelList(personnelList);
@@ -54,6 +61,8 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
       setState(() {
         _personnelList = personnelList;
       });
+      
+      print('Personel listesi state\'e kaydedildi: ${_personnelList.length} personel');
     } catch (e) {
       print('Personel listesi yükleme hatası: $e');
       // Firebase hatası durumunda local'den yükle
@@ -184,6 +193,11 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
                         title: 'Arıza Takibi',
                         index: 3,
                       ),
+                      _buildMenuItem(
+                        icon: Icons.analytics,
+                        title: 'Personel Performansı',
+                        index: 4,
+                      ),
                     ],
                   ),
                 ),
@@ -243,6 +257,8 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
             : _buildAccessDenied();
       case 3:
         return _buildFaultTracking();
+      case 4:
+        return _buildPersonnelPerformance();
       default:
         return _buildDashboard();
     }
@@ -261,6 +277,33 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
+          const SizedBox(height: 20),
+          
+          // Test personeli ekleme butonu
+          Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: _addTestPersonnel,
+                icon: const Icon(Icons.person_add),
+                label: const Text('Test Personeli Ekle'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton.icon(
+                onPressed: _loadPersonnelList,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Personel Listesini Yenile'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          
           const SizedBox(height: 20),
           
           // İstatistik kartları
@@ -664,7 +707,7 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Arıza Takibi',
+            'Arıza Takibi ve Atama',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -679,6 +722,8 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
                 value: 'all',
                 items: const [
                   DropdownMenuItem(value: 'all', child: Text('Tümü')),
+                  DropdownMenuItem(value: 'unassigned', child: Text('Atanmamış')),
+                  DropdownMenuItem(value: 'assigned', child: Text('Atanmış')),
                   DropdownMenuItem(value: 'pending', child: Text('Bekleyen')),
                   DropdownMenuItem(value: 'in_progress', child: Text('İşlemde')),
                   DropdownMenuItem(value: 'completed', child: Text('Tamamlanan')),
@@ -731,100 +776,213 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
                   );
                 }
 
-                return ListView.builder(
-                  itemCount: reports.length,
-                  itemBuilder: (context, index) {
-                    final report = FaultReportModel.fromMap(
-                      reports[index].data() as Map<String, dynamic>,
-                    );
-                    
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      child: ExpansionTile(
-                        leading: CircleAvatar(
-                          backgroundColor: _getPriorityColor(report.priority),
-                          child: Text(
-                            report.priority[0].toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        title: Text(report.title),
-                        subtitle: Text(
-                          '${report.category} • ${report.location} • ${_formatDate(report.createdAt)}',
-                        ),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Açıklama: ${report.description}'),
-                                const SizedBox(height: 10),
-                                Text('Takip No: ${report.trackingNumber}'),
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _getStatusColor(report.status),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        'Durum: ${_getStatusText(report.status)}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: Colors.blue.withOpacity(0.3),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.info_outline,
-                                        color: Colors.blue[600],
-                                        size: 16,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          'Arıza durumu güncellemeleri personel tarafından yapılır',
-                                          style: TextStyle(
-                                            color: Colors.blue[600],
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
+                                 return ListView.builder(
+                   itemCount: reports.length,
+                   itemBuilder: (context, index) {
+                     final report = FaultReportModel.fromMap(
+                       reports[index].data() as Map<String, dynamic>,
+                     );
+                     
+                     return Card(
+                       margin: const EdgeInsets.only(bottom: 10),
+                       child: ExpansionTile(
+                         leading: CircleAvatar(
+                           backgroundColor: _getPriorityColor(report.priority),
+                           child: Text(
+                             report.priority[0].toUpperCase(),
+                             style: const TextStyle(
+                               color: Colors.white,
+                               fontWeight: FontWeight.bold,
+                             ),
+                           ),
+                         ),
+                         title: Text(report.title),
+                         subtitle: Column(
+                           crossAxisAlignment: CrossAxisAlignment.start,
+                           children: [
+                             Text(
+                               '${report.category} • ${report.location} • ${_formatDate(report.createdAt)}',
+                             ),
+                             if (report.assignedTo != null)
+                               Text(
+                                 'Atanan: ${report.assignedByName}',
+                                 style: TextStyle(
+                                   color: Colors.green[600],
+                                   fontWeight: FontWeight.bold,
+                                 ),
+                               )
+                             else
+                               Text(
+                                 'Atanmamış',
+                                 style: TextStyle(
+                                   color: Colors.orange[600],
+                                   fontWeight: FontWeight.bold,
+                                 ),
+                               ),
+                           ],
+                         ),
+                         children: [
+                           Padding(
+                             padding: const EdgeInsets.all(16),
+                             child: Column(
+                               crossAxisAlignment: CrossAxisAlignment.start,
+                               children: [
+                                 Text('Açıklama: ${report.description}'),
+                                 const SizedBox(height: 10),
+                                 Text('Takip No: ${report.trackingNumber}'),
+                                 const SizedBox(height: 10),
+                                 Row(
+                                   children: [
+                                     Container(
+                                       padding: const EdgeInsets.symmetric(
+                                         horizontal: 12,
+                                         vertical: 6,
+                                       ),
+                                       decoration: BoxDecoration(
+                                         color: _getStatusColor(report.status),
+                                         borderRadius: BorderRadius.circular(12),
+                                       ),
+                                       child: Text(
+                                         'Durum: ${_getStatusText(report.status)}',
+                                         style: const TextStyle(
+                                           color: Colors.white,
+                                           fontWeight: FontWeight.bold,
+                                           fontSize: 12,
+                                         ),
+                                       ),
+                                     ),
+                                   ],
+                                 ),
+                                 const SizedBox(height: 10),
+                                 
+                                 // Atama durumu
+                                 if (report.assignedTo != null) ...[
+                                   Container(
+                                     padding: const EdgeInsets.all(12),
+                                     decoration: BoxDecoration(
+                                       color: Colors.green.withOpacity(0.1),
+                                       borderRadius: BorderRadius.circular(8),
+                                       border: Border.all(
+                                         color: Colors.green.withOpacity(0.3),
+                                       ),
+                                     ),
+                                     child: Row(
+                                       children: [
+                                         Icon(
+                                           Icons.person,
+                                           color: Colors.green[600],
+                                           size: 16,
+                                         ),
+                                         const SizedBox(width: 8),
+                                         Expanded(
+                                           child: Column(
+                                             crossAxisAlignment: CrossAxisAlignment.start,
+                                             children: [
+                                               Text(
+                                                 'Atanan Personel: ${report.assignedByName}',
+                                                 style: TextStyle(
+                                                   color: Colors.green[600],
+                                                   fontWeight: FontWeight.bold,
+                                                 ),
+                                               ),
+                                               if (report.assignedAt != null)
+                                                 Text(
+                                                   'Atama Tarihi: ${_formatDate(report.assignedAt!)}',
+                                                   style: TextStyle(
+                                                     color: Colors.green[600],
+                                                     fontSize: 12,
+                                                   ),
+                                                 ),
+                                             ],
+                                           ),
+                                         ),
+                                         IconButton(
+                                           icon: const Icon(Icons.edit, color: Colors.blue),
+                                           onPressed: () => _showAssignFaultDialog(report),
+                                           tooltip: 'Personel Değiştir',
+                                         ),
+                                       ],
+                                     ),
+                                   ),
+                                 ] else ...[
+                                   Container(
+                                     padding: const EdgeInsets.all(12),
+                                     decoration: BoxDecoration(
+                                       color: Colors.orange.withOpacity(0.1),
+                                       borderRadius: BorderRadius.circular(8),
+                                       border: Border.all(
+                                         color: Colors.orange.withOpacity(0.3),
+                                       ),
+                                     ),
+                                     child: Row(
+                                       children: [
+                                         Icon(
+                                           Icons.warning,
+                                           color: Colors.orange[600],
+                                           size: 16,
+                                         ),
+                                         const SizedBox(width: 8),
+                                         Expanded(
+                                           child: Text(
+                                             'Bu arıza henüz bir personel atanmamış',
+                                             style: TextStyle(
+                                               color: Colors.orange[600],
+                                               fontWeight: FontWeight.bold,
+                                             ),
+                                           ),
+                                         ),
+                                         ElevatedButton.icon(
+                                           onPressed: () => _showAssignFaultDialog(report),
+                                           icon: const Icon(Icons.person_add),
+                                           label: const Text('Personel Ata'),
+                                           style: ElevatedButton.styleFrom(
+                                             backgroundColor: Colors.orange,
+                                             foregroundColor: Colors.white,
+                                           ),
+                                         ),
+                                       ],
+                                     ),
+                                   ),
+                                 ],
+                                 
+                                 const SizedBox(height: 10),
+                                 Container(
+                                   padding: const EdgeInsets.all(12),
+                                   decoration: BoxDecoration(
+                                     color: Colors.blue.withOpacity(0.1),
+                                     borderRadius: BorderRadius.circular(8),
+                                     border: Border.all(
+                                       color: Colors.blue.withOpacity(0.3),
+                                     ),
+                                   ),
+                                   child: Row(
+                                     children: [
+                                       Icon(
+                                         Icons.info_outline,
+                                         color: Colors.blue[600],
+                                         size: 16,
+                                       ),
+                                       const SizedBox(width: 8),
+                                       Expanded(
+                                         child: Text(
+                                           'Arıza durumu güncellemeleri personel tarafından yapılır',
+                                           style: TextStyle(
+                                             color: Colors.blue[600],
+                                             fontSize: 12,
+                                           ),
+                                         ),
+                                       ),
+                                     ],
+                                   ),
+                                 ),
+                               ],
+                             ),
+                           ),
+                         ],
+                       ),
+                     );
+                   },
+                 );
               },
             ),
           ),
@@ -1625,4 +1783,661 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
         return 'Bilinmiyor';
     }
   }
+
+  // Personel performans sekmesi
+  Widget _buildPersonnelPerformance() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Personel Performans Analizi',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 20),
+          
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('reports').snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return const Center(
+                  child: Text('Veri yüklenirken hata oluştu'),
+                );
+              }
+
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final reports = snapshot.data?.docs ?? [];
+              
+              // Personel performans verilerini hesapla
+              Map<String, PersonnelPerformanceData> personnelStats = {};
+              
+              for (var doc in reports) {
+                final data = doc.data() as Map<String, dynamic>;
+                final report = FaultReportModel.fromMap(data);
+                
+                // Sadece tamamlanmış arızaları analiz et
+                if (report.status == 'completed') {
+                  final personnelId = data['updatedBy'] as String? ?? 'unknown';
+                  
+                  if (!personnelStats.containsKey(personnelId)) {
+                    personnelStats[personnelId] = PersonnelPerformanceData(
+                      personnelId: personnelId,
+                      personnelName: data['updatedByName'] as String? ?? 'Bilinmeyen Personel',
+                      totalCompleted: 0,
+                      totalResolutionTime: 0,
+                      averageResolutionTime: 0,
+                    );
+                  }
+                  
+                  // Çözüm süresini hesapla
+                  DateTime? createdAt;
+                  DateTime? completedAt;
+                  
+                  // createdAt alanını parse et
+                  if (data['createdAt'] is Timestamp) {
+                    createdAt = (data['createdAt'] as Timestamp).toDate();
+                  } else if (data['createdAt'] is String) {
+                    try {
+                      createdAt = DateTime.parse(data['createdAt']);
+                    } catch (e) {
+                      continue; // Geçersiz tarih formatı, bu raporu atla
+                    }
+                  }
+                  
+                  // lastUpdated alanını parse et
+                  if (data['lastUpdated'] is Timestamp) {
+                    completedAt = (data['lastUpdated'] as Timestamp).toDate();
+                  } else if (data['lastUpdated'] is String) {
+                    try {
+                      completedAt = DateTime.parse(data['lastUpdated']);
+                    } catch (e) {
+                      continue; // Geçersiz tarih formatı, bu raporu atla
+                    }
+                  }
+                  
+                  if (createdAt != null && completedAt != null) {
+                    final resolutionTime = completedAt.difference(createdAt).inDays;
+                    personnelStats[personnelId]!.totalCompleted++;
+                    personnelStats[personnelId]!.totalResolutionTime += resolutionTime;
+                  }
+                }
+              }
+              
+              // Ortalama çözüm sürelerini hesapla
+              for (var stat in personnelStats.values) {
+                if (stat.totalCompleted > 0) {
+                  stat.averageResolutionTime = stat.totalResolutionTime / stat.totalCompleted;
+                }
+              }
+              
+              // Performans verilerini sırala (ortalama çözüm süresine göre)
+              final sortedStats = personnelStats.values.toList()
+                ..sort((a, b) => a.averageResolutionTime.compareTo(b.averageResolutionTime));
+              
+              return Column(
+                children: [
+                  // Genel istatistikler
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildPerformanceMetric(
+                          title: 'Toplam Personel',
+                          value: personnelStats.length.toString(),
+                          icon: Icons.people,
+                          color: Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: _buildPerformanceMetric(
+                          title: 'Toplam Tamamlanan',
+                          value: personnelStats.values
+                              .fold(0, (sum, stat) => sum + stat.totalCompleted)
+                              .toString(),
+                          icon: Icons.check_circle,
+                          color: Colors.green,
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: _buildPerformanceMetric(
+                          title: 'Ortalama Çözüm Süresi',
+                          value: personnelStats.isNotEmpty
+                              ? '${(personnelStats.values
+                                      .fold(0.0, (sum, stat) => sum + stat.averageResolutionTime) /
+                                  personnelStats.length)
+                                  .toStringAsFixed(1)} gün'
+                              : '0 gün',
+                          icon: Icons.timeline,
+                          color: Colors.orange,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 30),
+                  
+                  // Personel listesi
+                  const Text(
+                    'Personel Performans Detayları',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  if (sortedStats.isEmpty)
+                    const Center(
+                      child: Text(
+                        'Henüz tamamlanmış arıza bulunmuyor',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    )
+                  else
+                    ...sortedStats.map((stat) => _buildPersonnelPerformanceCard(stat)),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPerformanceMetric({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey[200]!,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            size: 40,
+            color: color,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.grey,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPersonnelPerformanceCard(PersonnelPerformanceData stat) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey[200]!,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: _getPerformanceColor(stat.averageResolutionTime),
+                child: Text(
+                  stat.personnelName[0].toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      stat.personnelName,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'ID: ${stat.personnelId}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _getPerformanceColor(stat.averageResolutionTime).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${stat.averageResolutionTime.toStringAsFixed(1)} gün',
+                  style: TextStyle(
+                    color: _getPerformanceColor(stat.averageResolutionTime),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          // Performans detayları
+          Row(
+            children: [
+              Expanded(
+                child: _buildPerformanceDetail(
+                  title: 'Tamamlanan',
+                  value: stat.totalCompleted.toString(),
+                  icon: Icons.check_circle,
+                  color: Colors.green,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildPerformanceDetail(
+                  title: 'Toplam Süre',
+                  value: '${stat.totalResolutionTime} gün',
+                  icon: Icons.timeline,
+                  color: Colors.blue,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildPerformanceDetail(
+                  title: 'Ortalama',
+                  value: '${stat.averageResolutionTime.toStringAsFixed(1)} gün',
+                  icon: Icons.analytics,
+                  color: Colors.orange,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPerformanceDetail({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.grey[600],
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getPerformanceColor(double averageDays) {
+    if (averageDays <= 1) return Colors.green;
+    if (averageDays <= 3) return Colors.orange;
+    return Colors.red;
+  }
+
+  // Test personeli ekleme fonksiyonu
+  void _addTestPersonnel() async {
+    try {
+      print('Test personeli ekleniyor...');
+      
+      // Test personeli verisi
+      final testPersonnel = AdminModel(
+        uid: 'test_personnel_${DateTime.now().millisecondsSinceEpoch}',
+        email: 'test${DateTime.now().millisecondsSinceEpoch}@example.com',
+        display: 'Test Personeli ${DateTime.now().millisecondsSinceEpoch}',
+        role: 'personel',
+        createdAt: DateTime.now(),
+        active: true,
+      );
+      
+      // Firebase'e kaydet
+      await FirebaseFirestore.instance
+          .collection('personnel')
+          .doc(testPersonnel.uid)
+          .set(testPersonnel.toMap());
+      
+      print('Test personeli Firebase\'e kaydedildi: ${testPersonnel.display}');
+      
+      // Personel listesini yenile
+      await _loadPersonnelList();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Test personeli eklendi: ${testPersonnel.display}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Test personeli ekleme hatası: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hata: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Arıza atama dialog'u
+  void _showAssignFaultDialog(FaultReportModel report) {
+    String? selectedPersonnelId;
+    bool isAssigning = false;
+
+    print('Atama dialog\'u açılıyor...');
+    print('Mevcut personel listesi: ${_personnelList.length} personel');
+    for (var personnel in _personnelList) {
+      print('- ${personnel.display} (${personnel.uid})');
+    }
+
+    // Personel listesi boşsa uyarı göster
+    if (_personnelList.isEmpty) {
+      showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (context) => AlertDialog(
+          title: const Text('Personel Bulunamadı'),
+          content: const Text(
+            'Henüz personel bulunmuyor. Önce Dashboard\'dan "Test Personeli Ekle" butonuna basarak personel ekleyin.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Tamam'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Arıza Ata: ${report.title}'),
+          content: SizedBox(
+            width: 400,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Kategori: ${report.category}'),
+                        Text('Öncelik: ${report.priority}'),
+                        Text('Konum: ${report.location}'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  const Text(
+                    'Personel Seçin:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _personnelList.length,
+                      itemBuilder: (context, index) {
+                        final personnel = _personnelList[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 4),
+                          child: RadioListTile<String>(
+                            title: Text(personnel.display),
+                            subtitle: Text(personnel.email),
+                            value: personnel.uid,
+                            groupValue: selectedPersonnelId,
+                            onChanged: (value) {
+                              print('Personel seçildi: $value');
+                              setState(() {
+                                selectedPersonnelId = value;
+                              });
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                print('Dialog iptal edildi');
+                Navigator.of(context).pop();
+              },
+              child: const Text('İptal'),
+            ),
+            if (report.assignedTo != null)
+              TextButton(
+                onPressed: isAssigning ? null : () async {
+                  // Atamayı kaldır
+                  setState(() {
+                    isAssigning = true;
+                  });
+                  
+                  try {
+                    await FirebaseFirestore.instance
+                        .collection('reports')
+                        .doc(report.id)
+                        .update({
+                      'assignedTo': null,
+                      'assignedByName': null,
+                      'assignedAt': null,
+                    });
+                    
+                    if (mounted) {
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Arıza ataması kaldırıldı'),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Hata: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  } finally {
+                    if (mounted) {
+                      setState(() {
+                        isAssigning = false;
+                      });
+                    }
+                  }
+                },
+                child: const Text('Atamayı Kaldır'),
+              ),
+            ElevatedButton(
+              onPressed: (selectedPersonnelId == null || isAssigning) ? null : () async {
+                print('Atama işlemi başlatılıyor...');
+                print('Seçilen personel ID: $selectedPersonnelId');
+                
+                setState(() {
+                  isAssigning = true;
+                });
+                
+                try {
+                  final selectedPersonnel = _personnelList.firstWhere(
+                    (p) => p.uid == selectedPersonnelId,
+                  );
+                  
+                  print('Seçilen personel: ${selectedPersonnel.display} (${selectedPersonnel.uid})');
+                  print('Arıza ID: ${report.id}');
+                  
+                  await FirebaseFirestore.instance
+                      .collection('reports')
+                      .doc(report.id)
+                      .update({
+                    'assignedTo': selectedPersonnel.uid,
+                    'assignedByName': selectedPersonnel.display,
+                    'assignedAt': DateTime.now().toIso8601String(),
+                  });
+                  
+                  print('Firebase güncelleme başarılı');
+                  
+                  if (mounted) {
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Arıza ${selectedPersonnel.display} adlı personel atandı'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  print('Atama hatası: $e');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Hata: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } finally {
+                  if (mounted) {
+                    setState(() {
+                      isAssigning = false;
+                    });
+                  }
+                }
+              },
+              child: isAssigning
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Ata'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Personel performans veri sınıfı
+class PersonnelPerformanceData {
+  final String personnelId;
+  final String personnelName;
+  int totalCompleted;
+  int totalResolutionTime;
+  double averageResolutionTime;
+
+  PersonnelPerformanceData({
+    required this.personnelId,
+    required this.personnelName,
+    required this.totalCompleted,
+    required this.totalResolutionTime,
+    required this.averageResolutionTime,
+  });
 }

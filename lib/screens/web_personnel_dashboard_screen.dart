@@ -222,11 +222,12 @@ class _WebPersonnelDashboardScreenState extends State<WebPersonnelDashboardScree
             ],
           ),
           const SizedBox(height: 30),
-          
+          r
           // İstatistik kartları
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('reports')
+                .where('assignedTo', isEqualTo: widget.personnel.uid)
                 .snapshots(),
             builder: (context, snapshot) {
               int todayNewReports = 0;
@@ -321,6 +322,7 @@ class _WebPersonnelDashboardScreenState extends State<WebPersonnelDashboardScree
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('reports')
+                  .where('assignedTo', isEqualTo: widget.personnel.uid)
                   .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
@@ -559,6 +561,7 @@ class _WebPersonnelDashboardScreenState extends State<WebPersonnelDashboardScree
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('reports')
+          .where('assignedTo', isEqualTo: widget.personnel.uid)
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
@@ -1753,6 +1756,7 @@ class _WebPersonnelDashboardScreenState extends State<WebPersonnelDashboardScree
       final querySnapshot = await FirebaseFirestore.instance
           .collection('reports')
           .where('status', isEqualTo: 'completed')
+          .where('assignedTo', isEqualTo: widget.personnel.uid)
           .get();
 
       if (querySnapshot.docs.isEmpty) {
@@ -1875,6 +1879,7 @@ class _WebPersonnelDashboardScreenState extends State<WebPersonnelDashboardScree
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('reports')
+                  .where('assignedTo', isEqualTo: widget.personnel.uid)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
