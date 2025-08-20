@@ -196,36 +196,6 @@ class ProfileScreen extends StatelessWidget {
                     children: [
                       _buildSettingItem(
                         context,
-                        'Bildirim Ayarları',
-                        Icons.notifications,
-                        Colors.blue,
-                        () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Bildirim ayarları yakında eklenecek!'),
-                              backgroundColor: Colors.blue,
-                            ),
-                          );
-                        },
-                      ),
-                      const Divider(),
-                      _buildSettingItem(
-                        context,
-                        'Gizlilik Ayarları',
-                        Icons.privacy_tip,
-                        Colors.green,
-                        () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Gizlilik ayarları yakında eklenecek!'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        },
-                      ),
-                      const Divider(),
-                      _buildSettingItem(
-                        context,
                         'Hakkında',
                         Icons.info,
                         Colors.orange,

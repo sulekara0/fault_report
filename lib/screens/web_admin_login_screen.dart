@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/admin_model.dart';
 import '../services/admin_session_service.dart';
 import 'web_admin_dashboard_screen.dart';
+import 'web_home_screen.dart';
 
 class WebAdminLoginScreen extends StatefulWidget {
   const WebAdminLoginScreen({super.key});
@@ -91,6 +92,28 @@ class _WebAdminLoginScreenState extends State<WebAdminLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => const WebHomeScreen(),
+              ),
+            );
+          },
+        ),
+        title: const Text(
+          'Yönetici Girişi',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: const Color(0xFF667eea),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(

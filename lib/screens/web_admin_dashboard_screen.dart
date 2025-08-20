@@ -30,10 +30,38 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
 
   // Personel listesini session'dan yükle
   void _loadPersonnelList() async {
-    final personnelList = await AdminSessionService.getPersonnelList();
-    setState(() {
-      _personnelList = personnelList;
-    });
+    try {
+      // Önce Firebase'den personelleri çek
+      final firebasePersonnel = await FirebaseFirestore.instance
+          .collection('personnel')
+          .get();
+      
+      List<AdminModel> personnelList = [];
+      
+      for (var doc in firebasePersonnel.docs) {
+        try {
+          final data = doc.data();
+          final personnel = AdminModel.fromMap(data);
+          personnelList.add(personnel);
+        } catch (e) {
+          print('Personel verisi okuma hatası: $e');
+        }
+      }
+      
+      // Local storage'a kaydet
+      await AdminSessionService.savePersonnelList(personnelList);
+      
+      setState(() {
+        _personnelList = personnelList;
+      });
+    } catch (e) {
+      print('Personel listesi yükleme hatası: $e');
+      // Firebase hatası durumunda local'den yükle
+      final personnelList = await AdminSessionService.getPersonnelList();
+      setState(() {
+        _personnelList = personnelList;
+      });
+    }
   }
 
   @override
@@ -466,12 +494,26 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Switch(
-                              value: personnel.active,
-                              onChanged: (value) {
-                                _updatePersonnelStatus(personnel.uid, value);
-                              },
+                            // Aktif/Pasif durumu göstergesi (sadece görüntüleme)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: personnel.active ? Colors.green : Colors.red,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                personnel.active ? 'Aktif' : 'Pasif',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10,
+                                ),
+                              ),
                             ),
+                            const SizedBox(width: 8),
                             IconButton(
                               icon: const Icon(Icons.edit, color: Colors.blue),
                               onPressed: () {
@@ -723,32 +765,57 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
                                 const SizedBox(height: 10),
                                 Text('Takip No: ${report.trackingNumber}'),
                                 const SizedBox(height: 10),
-                                Text('Durum: ${report.status}'),
-                                const SizedBox(height: 20),
                                 Row(
                                   children: [
-                                    ElevatedButton(
-                                      onPressed: () {
-                                        _updateReportStatus(report.id, 'in_progress');
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.orange,
-                                        foregroundColor: Colors.white,
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
                                       ),
-                                      child: const Text('İşleme Al'),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    ElevatedButton(
-                                      onPressed: () {
-                                        _updateReportStatus(report.id, 'completed');
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.green,
-                                        foregroundColor: Colors.white,
+                                      decoration: BoxDecoration(
+                                        color: _getStatusColor(report.status),
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
-                                      child: const Text('Tamamla'),
+                                      child: Text(
+                                        'Durum: ${_getStatusText(report.status)}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
                                     ),
                                   ],
+                                ),
+                                const SizedBox(height: 10),
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: Colors.blue.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.info_outline,
+                                        color: Colors.blue[600],
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Arıza durumu güncellemeleri personel tarafından yapılır',
+                                          style: TextStyle(
+                                            color: Colors.blue[600],
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
@@ -845,9 +912,63 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
               Text('Konum: ${report.location}'),
               Text('Açıklama: ${report.description}'),
               Text('Takip No: ${report.trackingNumber}'),
-              Text('Durum: ${report.status}'),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Text('Durum: '),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(report.status),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _getStatusText(report.status),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
               Text('Oluşturan: ${report.contactName}'),
               Text('Tarih: ${_formatDate(report.createdAt)}'),
+              const SizedBox(height: 15),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.grey.withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: Colors.grey[600],
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Arıza durumu güncellemeleri personel panelinden yapılır',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -960,7 +1081,17 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
                     throw Exception('Bu e-posta adresi ile zaten bir personel kayıtlı');
                   }
 
-                  // Local olarak personel oluştur
+                  // Firebase'de de kontrol et
+                  final firebaseQuery = await FirebaseFirestore.instance
+                      .collection('personnel')
+                      .where('email', isEqualTo: _emailController.text.trim())
+                      .get();
+                  
+                  if (firebaseQuery.docs.isNotEmpty) {
+                    throw Exception('Bu e-posta adresi ile zaten bir personel kayıtlı');
+                  }
+
+                  // Personel oluştur
                   final personnel = AdminModel(
                     uid: 'personnel_${DateTime.now().millisecondsSinceEpoch}',
                     email: _emailController.text.trim(),
@@ -972,7 +1103,16 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
                     createdBy: widget.admin.uid,
                   );
 
-                  // Local listeye ekle - ana widget'ın state'ini güncelle
+                  // Firebase'e kaydet
+                  await FirebaseFirestore.instance
+                      .collection('personnel')
+                      .doc(personnel.uid)
+                      .set({
+                    ...personnel.toMap(),
+                    'password': _passwordController.text.trim(), // Şifreyi de kaydet
+                  });
+
+                  // Local listeye ekle
                   _personnelList.add(personnel);
                   
                   // Session'a kaydet
@@ -1264,6 +1404,23 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
                 });
 
                 try {
+                  // Firebase'de güncelle
+                  Map<String, dynamic> updateData = {
+                    'display': _nameController.text.trim(),
+                    'email': _emailController.text.trim(),
+                    'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+                  };
+                  
+                  // Şifre değiştirilecekse ekle
+                  if (_passwordController.text.trim().isNotEmpty) {
+                    updateData['password'] = _passwordController.text.trim();
+                  }
+                  
+                  await FirebaseFirestore.instance
+                      .collection('personnel')
+                      .doc(personnel.uid)
+                      .update(updateData);
+
                   // Personeli güncelle
                   final updatedPersonnel = personnel.copyWith(
                     display: _nameController.text.trim(),
@@ -1322,26 +1479,7 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
     );
   }
 
-  void _updatePersonnelStatus(String uid, bool active) async {
-    try {
-      // Local listede personeli bul ve güncelle
-      final index = _personnelList.indexWhere((p) => p.uid == uid);
-      if (index != -1) {
-        setState(() {
-          _personnelList[index] = _personnelList[index].copyWith(active: active);
-        });
-        // Session'a kaydet
-        await AdminSessionService.savePersonnelList(_personnelList);
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Hata: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
+
 
   void _deletePersonnel(AdminModel personnel) async {
     final confirmed = await showDialog<bool>(
@@ -1365,6 +1503,12 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
 
     if (confirmed == true) {
       try {
+        // Firebase'den personeli sil
+        await FirebaseFirestore.instance
+            .collection('personnel')
+            .doc(personnel.uid)
+            .delete();
+        
         // Local listeden personeli sil
         setState(() {
           _personnelList.removeWhere((p) => p.uid == personnel.uid);
@@ -1450,26 +1594,35 @@ class _WebAdminDashboardScreenState extends State<WebAdminDashboardScreen> {
     }
   }
 
-  void _updateReportStatus(String reportId, String status) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('reports')
-          .doc(reportId)
-          .update({'status': status});
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Arıza durumu güncellendi'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Hata: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+  // Admin panelinde durum renkleri
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return Colors.orange;
+      case 'in_progress':
+        return Colors.blue;
+      case 'completed':
+        return Colors.green;
+      case 'cancelled':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  // Admin panelinde durum metinleri
+  String _getStatusText(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return 'Bekliyor';
+      case 'in_progress':
+        return 'İşlemde';
+      case 'completed':
+        return 'Tamamlandı';
+      case 'cancelled':
+        return 'İptal Edildi';
+      default:
+        return 'Bilinmiyor';
     }
   }
 }

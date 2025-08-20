@@ -6,7 +6,10 @@ import 'dart:io';
 import 'dart:math';
 import '../models/user_model.dart';
 import '../models/fault_report_model.dart';
+import '../models/fault_status_model.dart';
+import '../services/fault_tracking_service.dart';
 import 'welcome_screen.dart';
+import 'fault_tracking_screen.dart';
 
 class FaultReportScreen extends StatefulWidget {
   final UserModel user;
@@ -175,10 +178,14 @@ class _FaultReportScreenState extends State<FaultReportScreen> {
         trackingNumber: trackingNumber,
       );
 
+      // Firebase'e kaydet
       await FirebaseFirestore.instance
           .collection('reports')
           .doc(reportId)
           .set(report.toMap());
+
+      // Yerel arıza takip listesine ekle
+      await _addToLocalTrackingList(report);
 
       // Başarı ekranına git
       if (mounted) {
@@ -225,6 +232,33 @@ class _FaultReportScreenState extends State<FaultReportScreen> {
     final dateStr = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     final randomStr = Random().nextInt(9999).toString().padLeft(4, '0');
     return 'RPT-$dateStr-$randomStr';
+  }
+
+  // Yerel arıza takip listesine ekle
+  Future<void> _addToLocalTrackingList(FaultReportModel report) async {
+    try {
+      // Mevcut arıza raporlarını al
+      final reportsList = await FaultTrackingService.getFaultReportsList();
+      
+      // Yeni raporu listeye ekle
+      reportsList.add(report);
+      
+      // Listeyi kaydet
+      await FaultTrackingService.saveFaultReports(reportsList);
+      
+      // İlk durum güncellemesi için tracking oluştur
+      await FaultTrackingService.updateFaultStatus(
+        faultReportId: report.id,
+        newStatus: FaultStatus.pending,
+        updatedBy: 'system',
+        updatedByName: 'Sistem',
+        note: 'Arıza bildirimi alındı ve incelenmeye alındı.',
+      );
+      
+      print('Arıza raporu yerel listeye eklendi: ${report.trackingNumber}');
+    } catch (e) {
+      print('Yerel listeye ekleme hatası: $e');
+    }
   }
 
   @override
@@ -1120,11 +1154,11 @@ class ReportSuccessScreen extends StatelessWidget {
                         width: double.infinity,
                         height: 50,
                         child: ElevatedButton(
-                          onPressed: () {
-                            // TODO: Bildirimi gör sayfasına git
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Bildirim görüntüleme özelliği yakında eklenecek!'),
+                          onPressed: () async {
+                            // Arıza takip sayfasına git
+                            await Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder: (context) => FaultTrackingScreen(userId: user.uid),
                               ),
                             );
                           },
@@ -1136,7 +1170,7 @@ class ReportSuccessScreen extends StatelessWidget {
                             ),
                           ),
                           child: const Text(
-                            'Bildirimi Gör',
+                            'Arızayı Görüntüle',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -1164,7 +1198,7 @@ class ReportSuccessScreen extends StatelessWidget {
                             ),
                           ),
                           child: const Text(
-                            'Yeni Bildirim',
+                            'Yeni Arıza Kaydı',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

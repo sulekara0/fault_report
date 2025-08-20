@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/admin_model.dart';
 import '../services/admin_session_service.dart';
 import 'web_personnel_dashboard_screen.dart';
+import 'web_home_screen.dart';
 
 class WebPersonnelLoginScreen extends StatefulWidget {
   const WebPersonnelLoginScreen({super.key});
@@ -35,16 +37,27 @@ class _WebPersonnelLoginScreenState extends State<WebPersonnelLoginScreen> {
       print('Personel giriş işlemi başlatılıyor...');
       print('E-posta: ${_emailController.text.trim()}');
       
-      // Session'dan personel listesini al
-      final personnelList = await AdminSessionService.getPersonnelList();
+      // Firebase'den personel ara
+      final personnelQuery = await FirebaseFirestore.instance
+          .collection('personnel')
+          .where('email', isEqualTo: _emailController.text.trim())
+          .where('active', isEqualTo: true)
+          .where('role', isEqualTo: 'personel')
+          .get();
       
-      // E-posta ve şifre ile personel ara (şifre kontrolü basit - demo için)
-      final personnel = personnelList.firstWhere(
-        (p) => p.email == _emailController.text.trim() && 
-               p.active == true &&
-               p.role == 'personel',
-        orElse: () => throw Exception('Geçersiz giriş bilgileri'),
-      );
+      if (personnelQuery.docs.isEmpty) {
+        throw Exception('Geçersiz giriş bilgileri');
+      }
+      
+      final personnelDoc = personnelQuery.docs.first;
+      final personnelData = personnelDoc.data();
+      
+      // Şifre kontrolü
+      if (personnelData['password'] != _passwordController.text.trim()) {
+        throw Exception('Geçersiz giriş bilgileri');
+      }
+      
+      final personnel = AdminModel.fromMap(personnelData);
       
       print('Personel bulundu: ${personnel.display}');
       
@@ -81,6 +94,16 @@ class _WebPersonnelLoginScreenState extends State<WebPersonnelLoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => const WebHomeScreen(),
+              ),
+            );
+          },
+        ),
         title: const Text(
           'Personel Girişi',
           style: TextStyle(
@@ -116,9 +139,10 @@ class _WebPersonnelLoginScreenState extends State<WebPersonnelLoginScreen> {
                 padding: const EdgeInsets.all(40),
                 child: Form(
                   key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                       // Logo ve başlık
                       Container(
                         padding: const EdgeInsets.all(20),
@@ -134,7 +158,7 @@ class _WebPersonnelLoginScreenState extends State<WebPersonnelLoginScreen> {
                       ),
                       const SizedBox(height: 30),
                       const Text(
-                        'Personel Paneli',
+                        'Personel Girişi',
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -288,6 +312,7 @@ class _WebPersonnelLoginScreenState extends State<WebPersonnelLoginScreen> {
                         ),
                       ),
                     ],
+                    ),
                   ),
                 ),
               ),
